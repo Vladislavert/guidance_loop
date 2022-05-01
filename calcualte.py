@@ -152,6 +152,24 @@ class Math:
 
         return (ret_angle)
 
+    def unit_vector(self, vector):
+        """ Returns the unit vector of the vector.  """
+        return vector / np.linalg.norm(vector)
+
+    def angle_between(self, v1, v2):
+        """ Returns the angle in radians between vectors 'v1' and 'v2'::
+
+                >>> angle_between((1, 0, 0), (0, 1, 0))
+                1.5707963267948966
+                >>> angle_between((1, 0, 0), (1, 0, 0))
+                0.0
+                >>> angle_between((1, 0, 0), (-1, 0, 0))
+                3.141592653589793
+        """
+        v1_u = self.unit_vector(v1)
+        v2_u = self.unit_vector(v2)
+        return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+
 
 class Math_model_aircraft:
     def __init__(self, velocity, position, phi):
@@ -160,6 +178,9 @@ class Math_model_aircraft:
         self.position = position
         self.past_velocity = np.array([0, 0, 0])
         self.phi = phi
+
+        self.mathem = Math()
+
 
 
     def rotate_matrix(self, phi):
@@ -190,7 +211,18 @@ class Math_model_aircraft:
         return self.phi
 
     def calculate_angle(self, phi):
-        self.phi = phi
+        # self.phi = phi
+        if (np.linalg.norm(self.velocity) == 0 or np.linalg.norm(self.past_velocity) == 0):
+            self.phi += 0
+        else:
+            self.phi += self.mathem.angle_between(self.velocity, self.past_velocity)
+
+        
+        if (self.phi > 360):
+            self.phi = 0
+        elif (self.phi < 0):
+            self.phi = 360
+        
 
 
 
@@ -276,7 +308,7 @@ class Simulator:
         array_position_airplane[1] = self.aircraft_target.get_position()
 
 
-        position_target_airplane = [] # координаты связанные с самолётом
+        position_target_airplane = self.aircraft.get_position() + (self.rotate_matrix(self.aircraft.get_phi()) @ self.aircraft_target.get_position()) # координаты связанные с самолётом
 
         print(self.aircraft_target.get_position())
         print(array_position_airplane)
@@ -288,11 +320,17 @@ class Simulator:
             #     print("time =" , i)
             #     break
 
+            
+            phi = self.mathem.calculate_angle(position_target_airplane[0], position_target_airplane[1])
+            
 
-            phi = self.mathem.calculate_angle(array_position_airplane[1][1] , array_position_airplane[1][0])
+            if (phi >= math.radians(270) and phi <= math.radians(360)):
+                phi -= math.radians(270)
+            elif (phi >= math.radians(0) and phi <= math.radians(90)):
+                phi += math.radians(90)
             print("phi = ", math.degrees(phi))
 
-            vis.get_orientation(math.radians(180) - phi)
+            vis.get_orientation(phi)
             
             # phi -= 0.001
 
@@ -300,7 +338,8 @@ class Simulator:
 
             
 
-            self.aircraft.calculate_position(300 * scale_factor, phi, i)
+            # self.aircraft.calculate_position(300 * scale_factor, phi, i)
+            self.aircraft.calculate_position(0 * scale_factor, phi, i)
             self.aircraft_target.calculate_position(-300 * scale_factor, self.aircraft_target.get_phi(), i)
 
             current_position_aircraft = self.aircraft.get_position()
