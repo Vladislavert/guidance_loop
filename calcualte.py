@@ -1,3 +1,5 @@
+from multiprocessing import parent_process
+from sqlite3 import connect
 from turtle import position
 from vispy import app, scene, visuals
 from vispy.visuals.transforms import STTransform, MatrixTransform
@@ -17,13 +19,13 @@ scale_factor = 0.0001
 # params radar
 detection_range = 80000.0 * scale_factor
 total_lead_angle = math.radians(11)
-opening_angle = math.radians(20)
+opening_angle = math.radians(15)
 
 
 
 # -------------------Graphics----------------------
 
-drawTrajectoryLines = True
+drawTrajLine = True
 
 Scatter3D = scene.visuals.create_visual_node(visuals.MarkersVisual)
 Sphere3D = scene.visuals.create_visual_node(visuals.EllipseVisual)
@@ -52,6 +54,11 @@ class Visualizer():
         zax.transform.rotate(90, (0, 1, 0))  # rotate cw around yaxis
         zax.transform.rotate(-45, (0, 0, 1))  # tick direction towards (-1,-1)
 
+
+        self.dataX = [0]
+        self.dataY = [0]
+        self.dataZ = [0]
+
         self.sc3d = Scatter3D(parent=self.view.scene)
         self.sc3d_1 = Scatter3D(parent=self.view.scene)
         self.sc3d.set_gl_state('translucent', blend=True, depth_test=True)
@@ -59,13 +66,26 @@ class Visualizer():
 
         self.range = scene.visuals.Ellipse(center = [0, 0, 0], color = [0, 1, 1, 0.1], radius = [detection_range, detection_range], border_color = [0, 1, 1, 1])
 
-        self.direction = scene.visuals.Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
+
+
+        self.line_trajectory = scene.visuals.Line(pos=[[0, 0], [0, 5]])
+        # self.line = scene.visuals.Line(pos=[[0, 0], [0, 5]])
+        self.view.add(self.line_trajectory)
+        
+
+        # Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
+        #                  axis_color=[0.7, 1, 1], tick_color='g', text_color='g',
+        #                  font_size=16, parent=self.view.scene, domain=(0., 5.))
+        self.direction_opening = scene.visuals.Axis(pos=[[0, 0], [0, detection_range]], tick_direction=(-1, 0),
                          axis_color=[0.7, 1, 1], tick_color='g', text_color='g',
                          font_size=16, parent=self.view.scene, domain=(0., 5.))
-        self.left_direction = scene.visuals.Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
+        self.direction = scene.visuals.Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
+                         axis_color=[0.7, 1, 1, 0.1], tick_color='g', text_color='g',
+                         font_size=16, parent=self.view.scene, domain=(0., 5.))
+        self.left_direction = scene.visuals.Axis(pos=[[0, 0], [0, detection_range]], tick_direction=(-1, 0),
                          axis_color='y', tick_color='g', text_color='g',
                          font_size=16, parent=self.view.scene, domain=(0., 5.))
-        self.right_direction = scene.visuals.Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
+        self.right_direction = scene.visuals.Axis(pos=[[0, 0], [0, detection_range]], tick_direction=(-1, 0),
                          axis_color='y', tick_color='g', text_color='g',
                          font_size=16, parent=self.view.scene, domain=(0., 5.))
 
@@ -103,7 +123,11 @@ class Visualizer():
         self.group_poses = pose_list
         self.group_colors = color_list
         self.update_data = True
-    
+        if drawTrajLine:
+            self.dataX.append(self.group_poses[0][0])
+            self.dataY.append(self.group_poses[0][1])
+            self.dataZ.append(self.group_poses[0][2])
+
     def get_orientation(self, orientation):
         self.orientation = orientation
 
@@ -116,20 +140,30 @@ class Visualizer():
             # self.sphere3D.set_data(center = self.group_poses[0])
             # self.sc3d_1.set_data(centreCircle)
 
+            if drawTrajLine:
+                dataPlot = np.array([self.dataX, self.dataY, self.dataZ]).T
+                # print(dataPlot)
+                self.line_trajectory.set_data(pos=dataPlot, color=(0, 1, 1, 1))
+
             tr_range = MatrixTransform()
             tr_range.translate((self.group_poses[0][0],
                           self.group_poses[0][1],
                           self.group_poses[0][2]))
             self.range.transform = tr_range
 
-
+            tr_opening = MatrixTransform()
             tr_direction = MatrixTransform()
             tr_left_direction = MatrixTransform()
             tr_right_direction = MatrixTransform()
 
+            tr_opening.rotate(math.degrees(self.orientation + opening_angle), (0, 0, 1))
             tr_direction.rotate(math.degrees(self.orientation), (0, 0, 1))
-            tr_left_direction.rotate(math.degrees(self.orientation + total_lead_angle), (0, 0, 1))
-            tr_right_direction.rotate(math.degrees(self.orientation - total_lead_angle), (0, 0, 1))
+            tr_left_direction.rotate(math.degrees(self.orientation + total_lead_angle + opening_angle), (0, 0, 1))
+            tr_right_direction.rotate(math.degrees(self.orientation - total_lead_angle + opening_angle), (0, 0, 1))
+
+            tr_opening.translate((self.group_poses[0][0],
+                                  self.group_poses[0][1],
+                                  self.group_poses[0][2]))
 
             tr_direction.translate((self.group_poses[0][0],
                                     self.group_poses[0][1],
@@ -146,15 +180,17 @@ class Visualizer():
 
 
             self.direction.transform = tr_direction
+            self.direction_opening.transform = tr_opening
+            # self.line.transform = tr_direction
+
+            # self.line.set_data(pos=self.group_poses[0], color=(0, 1, 1, 1))
+        
 
             self.left_direction.transform = tr_left_direction
             self.right_direction.transform = tr_right_direction
             # tr_direction.rotate(math.degrees(self.orientation) - 11, (0, 0, 1))
             # self.right_direction.transform = tr_direction
 
-            # tr.rotate(radToDeg * (bodyOrientation[0]), (1, 0, 0))
-            # tr.rotate(radToDeg * (bodyOrientation[1]), (0, 1, 0))
-            # tr.rotate(radToDeg * (bodyOrientation[2]), (0, 0, 1))
             
             # self.sphere3D = Sphere3D(parent=self.view.scene, center = self.group_poses[0])
             
@@ -314,18 +350,15 @@ class Simulator:
         
         return array_matrix_2d
 
-    def is_detection(self):
-        distance =  np.array([0.0, detection_range])
-        if (LA.norm(self.position_target) <= LA.norm(self.position_airplane + self.rotate_matrix(self.phi + self.total_lead_angle) @ distance)):
-            angle_vector = self.angle(self.rotate_matrix(self.phi) @ self.position_airplane, self.position_target)
-            print("radius")
-            if (angle_vector >= 1.57 - 0.34 and angle_vector >= 1.57 - 0.34):
-                print("angle =", angle_vector * 180 / 3.14)
-                return (True)
-            else:
-                return (False)
+    def is_detection(self, position_aircraft_target, position_aircraft, phi):
+        distance = np.linalg.norm(np.array([0.0, detection_range]))
+        between_distance = np.linalg.norm(position_aircraft - position_aircraft_target)
+
+        if (between_distance <= distance):
+            # Добавить векторное произведение, для проверки попадания в диапазон
+            return True
         else:
-            return (False)
+            return False 
 
     def start(self):
         
@@ -341,21 +374,27 @@ class Simulator:
 
         position_target_airplane = self.aircraft.get_position() + (self.rotate_matrix(self.aircraft.get_phi()) @ self.aircraft_target.get_position()) # координаты связанные с самолётом
 
+
+
         print(self.aircraft_target.get_position())
         print(array_position_airplane)
 
         time.sleep(1)
         for i in np.arange(0, 100, self.dt):
             
-            # if (is_detection(position_target, position_airplane, phi)):
-            #     print("time =" , i)
-            #     break
 
             
-            # phi = self.mathem.calculate_angle(position_target_airplane[0], position_target_airplane[1])
-
-            phi = self.mathem.get_angle(center = np.array([0, 0]), point = position_target_airplane)
+            current_position_aircraft = self.aircraft.get_position()
+            current_position_aircraft_target = self.aircraft_target.get_position()
+            phi = self.mathem.get_angle(center = np.array([0, 0]), point =  current_position_aircraft_target - current_position_aircraft)
             phi += math.pi
+
+            if (self.is_detection(current_position_aircraft_target, current_position_aircraft, phi)):
+                print("time =" , i)
+                break
+
+            # phi = self.mathem.get_angle(center = np.array([0, 0]), point = position_target_airplane)
+            # phi = self.mathem.get_angle(center = np.array([0, 0]), point = current_position_aircraft - current_position_aircraft_target)
 
             # if (phi >= math.radians(270) and phi <= math.radians(360)):
             #     phi -= math.radians(270)
@@ -375,15 +414,15 @@ class Simulator:
             
 
             # self.aircraft.calculate_position(300 * scale_factor, phi, i)
-            self.aircraft.calculate_position(0 * scale_factor, phi, i)
+            self.aircraft.calculate_position(300 * scale_factor, phi + math.radians(90) + opening_angle, i)
+            # self.aircraft.calculate_position(0 * scale_factor, phi, i)
             # self.aircraft_target.calculate_position(-300 * scale_factor, self.aircraft_target.get_phi(), i)
             # self.aircraft_target.calculate_position(-300 * scale_factor, math.radians(175), i)
             self.aircraft_target.calculate_position(-300 * scale_factor, math.radians(90), i)
 
-            current_position_aircraft = self.aircraft.get_position()
-            current_position_aircraft_target = self.aircraft_target.get_position()
 
             position_target_airplane = current_position_aircraft + (self.rotate_matrix(self.aircraft.get_phi()) @ current_position_aircraft_target)
+            # position_target_airplane = current_position_aircraft + (current_position_aircraft_target)
 
             array_position_airplane[0] = current_position_aircraft
             array_position_airplane[1] = current_position_aircraft_target
