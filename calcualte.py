@@ -20,7 +20,8 @@ scale_factor = 0.0001
 detection_range = 80000.0 * scale_factor
 total_lead_angle = math.radians(11)
 opening_angle = math.radians(15)
-
+speed_aircraft = 300 * scale_factor
+speed_aircraft_target = -300 * scale_factor
 
 
 # -------------------Graphics----------------------
@@ -49,9 +50,9 @@ class Visualizer():
         zax = scene.Axis(pos=[[0, 0], [-5, 0]], tick_direction=(0, -1),
                          axis_color='b', tick_color='b', text_color='b',
                          font_size=16, parent=self.view.scene, domain=(0., 5.))
-        # # its acutally an inverted xaxis
+        # # its actually an inverted x-axis
         zax.transform = scene.transforms.MatrixTransform()
-        zax.transform.rotate(90, (0, 1, 0))  # rotate cw around yaxis
+        zax.transform.rotate(90, (0, 1, 0))  # rotate cw around y-axis
         zax.transform.rotate(-45, (0, 0, 1))  # tick direction towards (-1,-1)
 
 
@@ -65,17 +66,9 @@ class Visualizer():
 
 
         self.range = scene.visuals.Ellipse(center = [0, 0, 0], color = [0, 1, 1, 0.1], radius = [detection_range, detection_range], border_color = [0, 1, 1, 1])
-
-
-
         self.line_trajectory = scene.visuals.Line(pos=[[0, 0], [0, 5]])
-        # self.line = scene.visuals.Line(pos=[[0, 0], [0, 5]])
         self.view.add(self.line_trajectory)
         
-
-        # Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
-        #                  axis_color=[0.7, 1, 1], tick_color='g', text_color='g',
-        #                  font_size=16, parent=self.view.scene, domain=(0., 5.))
         self.direction_opening = scene.visuals.Axis(pos=[[0, 0], [0, detection_range]], tick_direction=(-1, 0),
                          axis_color=[0.7, 1, 1], tick_color='g', text_color='g',
                          font_size=16, parent=self.view.scene, domain=(0., 5.))
@@ -88,18 +81,9 @@ class Visualizer():
         self.right_direction = scene.visuals.Axis(pos=[[0, 0], [0, detection_range]], tick_direction=(-1, 0),
                          axis_color='y', tick_color='g', text_color='g',
                          font_size=16, parent=self.view.scene, domain=(0., 5.))
-
         self.view.add(self.range)
 
-
-        # params aircrafts
         self.orientation = 0
-
-# Box(width=self.bodyBoxWidth,
-#                                     height=self.bodyBoxHeight,
-#                                     depth=self.bodyBoxDepth,
-#                                     color=(0, 0, 1, 1),
-#                                     edge_color='green')
         self.group_colors = np.ones((1, 4), dtype=np.float32)
         self.group_poses = np.zeros((1, 3), dtype=np.float32)
         self.update_data = False
@@ -110,16 +94,10 @@ class Visualizer():
         timer.connect(self._updatePlots)
         timer.start()
         self.canvas3d.show()
-        # self.canvasXY.show()
         app.run()
     
 
     def setVehicleStates(self, pose_list, color_list):
-        # так должен выглдеть массив для 4 БЛА
-        # poses = np.zeros((4, 3))
-        # colors = np.zeros((4, 4))
-        # for i in range(len(pose_list)):
-        #     pos = n
         self.group_poses = pose_list
         self.group_colors = color_list
         self.update_data = True
@@ -135,14 +113,9 @@ class Visualizer():
         if(self.update_data == True):
             self.sc3d.set_data(self.group_poses, face_color=self.group_colors, symbol='o', size=10,
                 edge_width=0.5, edge_color='blue')
-            # self.sphere3D.set_data(self.group_poses, face_color=self.group_colors, symbol='o', size=10,
-            #     edge_width=0.5, edge_color='blue')
-            # self.sphere3D.set_data(center = self.group_poses[0])
-            # self.sc3d_1.set_data(centreCircle)
 
             if drawTrajLine:
                 dataPlot = np.array([self.dataX, self.dataY, self.dataZ]).T
-                # print(dataPlot)
                 self.line_trajectory.set_data(pos=dataPlot, color=(0, 1, 1, 1))
 
             tr_range = MatrixTransform()
@@ -177,31 +150,16 @@ class Visualizer():
                                           self.group_poses[0][1],
                                           self.group_poses[0][2]))
 
-
-
             self.direction.transform = tr_direction
             self.direction_opening.transform = tr_opening
-            # self.line.transform = tr_direction
-
-            # self.line.set_data(pos=self.group_poses[0], color=(0, 1, 1, 1))
-        
-
             self.left_direction.transform = tr_left_direction
             self.right_direction.transform = tr_right_direction
-            # tr_direction.rotate(math.degrees(self.orientation) - 11, (0, 0, 1))
-            # self.right_direction.transform = tr_direction
-
-            
-            # self.sphere3D = Sphere3D(parent=self.view.scene, center = self.group_poses[0])
-            
 
             self.update_data = False
-
 
 vis = Visualizer()
 
 # -------------------------------------------------
-
 
 class Math:
     def calculate_angle(self, x, y):
@@ -254,12 +212,10 @@ class Math_model_aircraft:
 
         self.mathem = Math()
 
-
-
     def rotate_matrix(self, phi):
         array_matrix_2d = np.array([[np.cos(phi), +np.sin(phi)],
                                 [-np.sin(phi), np.cos(phi)]])
-        
+
         return array_matrix_2d
 
     def calculate_position(self, abs_velocity, phi, dt):
@@ -267,7 +223,6 @@ class Math_model_aircraft:
         self.calculate_angle(phi)
         self.position += self.velocity * dt
         self.past_velocity = self.velocity
-        
 
     def calculate_velocity(self, abs_velocity, phi):
         self.velocity[0] = abs_velocity * np.cos(phi)
@@ -284,13 +239,11 @@ class Math_model_aircraft:
         return self.phi
 
     def calculate_angle(self, phi):
-        # self.phi = phi
         if (np.linalg.norm(self.velocity) == 0 or np.linalg.norm(self.past_velocity) == 0):
             self.phi += 0
         else:
             self.phi += self.mathem.angle_between(self.velocity, self.past_velocity)
 
-        
         if (self.phi > 360):
             self.phi = 0
         elif (self.phi < 0):
@@ -303,9 +256,7 @@ class Simulator:
 
         self.mathem = Math()
 
-
         # params aircraft
-        # self.velocity_airplane = np.array([0.0, 300.0, 0])
         self.velocity_airplane = np.array([0, 0, 0]) * scale_factor
         self.position_airplane = np.array([0.0, 0.0, 0]) * scale_factor
         self.phi = 0
@@ -316,7 +267,6 @@ class Simulator:
 
         # params simulator
         self.dt = 0.1
-
         self.aircraft = Math_model_aircraft(self.velocity_airplane, self.position_airplane, self.phi)
         self.aircraft_target = Math_model_aircraft(self.velocity_target, self.position_target, math.radians(90))
 
@@ -328,20 +278,6 @@ class Simulator:
 
     def angle(self, v1, v2):
         return math.acos(self.dotproduct(v1, v2) / (self.length(v1) * self.length(v2)))
-
-
-    # def calculate_angle(self, x, y):
-    #     ret_angle = np.arctan(y / x)
-
-    # def calculate_angle(self, x, y):
-    #     ret_angle = np.arctan2(y , x) + math.radians(180)
-
-        return ret_angle
-
-    # def rotate_matrix(self, phi):
-    #     array_matrix_2d = np.array([[np.cos(phi), +np.sin(phi)],
-    #                             [-np.sin(phi), np.cos(phi)]])
-
 
     def rotate_matrix(self, phi):
         array_matrix_2d = np.array([[np.cos(phi),   -np.sin(phi),   0],
@@ -361,9 +297,6 @@ class Simulator:
             return False 
 
     def start(self):
-        
-        # array_position_airplane = []
-        array_position_target = []
 
         group_colors = np.ones((2, 4), dtype=np.float32)
         array_position_airplane = np.ones((2, 3), dtype=np.float32)
@@ -374,15 +307,11 @@ class Simulator:
 
         position_target_airplane = self.aircraft.get_position() + (self.rotate_matrix(self.aircraft.get_phi()) @ self.aircraft_target.get_position()) # координаты связанные с самолётом
 
-
-
         print(self.aircraft_target.get_position())
         print(array_position_airplane)
 
         time.sleep(1)
         for i in np.arange(0, 100, self.dt):
-            
-
             
             current_position_aircraft = self.aircraft.get_position()
             current_position_aircraft_target = self.aircraft_target.get_position()
@@ -393,45 +322,21 @@ class Simulator:
                 print("time =" , i)
                 break
 
-            # phi = self.mathem.get_angle(center = np.array([0, 0]), point = position_target_airplane)
-            # phi = self.mathem.get_angle(center = np.array([0, 0]), point = current_position_aircraft - current_position_aircraft_target)
-
-            # if (phi >= math.radians(270) and phi <= math.radians(360)):
-            #     phi -= math.radians(270)
-            # elif (phi >= math.radians(0) and phi <= math.radians(90)):
-            #     phi += math.radians(90)
-            # elif (phi >= math.radians(180) and phi <= math.radians(270)):
-            #     phi -= math.radians(180)
             print("phi = ", math.degrees(phi))
             
-
             vis.get_orientation(phi)
             
-            # phi -= 0.001
-
-            # phi = calculate_angle(position_target[0], position_target[1])
-
-            
-
-            # self.aircraft.calculate_position(300 * scale_factor, phi, i)
-            self.aircraft.calculate_position(300 * scale_factor, phi + math.radians(90) + opening_angle, i)
-            # self.aircraft.calculate_position(0 * scale_factor, phi, i)
-            # self.aircraft_target.calculate_position(-300 * scale_factor, self.aircraft_target.get_phi(), i)
-            # self.aircraft_target.calculate_position(-300 * scale_factor, math.radians(175), i)
-            self.aircraft_target.calculate_position(-300 * scale_factor, math.radians(90), i)
-
+            self.aircraft.calculate_position(speed_aircraft, phi + math.radians(90) + opening_angle, i)
+            self.aircraft_target.calculate_position(speed_aircraft_target, math.radians(90), i)
 
             position_target_airplane = current_position_aircraft + (self.rotate_matrix(self.aircraft.get_phi()) @ current_position_aircraft_target)
-            # position_target_airplane = current_position_aircraft + (current_position_aircraft_target)
-
             array_position_airplane[0] = current_position_aircraft
             array_position_airplane[1] = current_position_aircraft_target
-            # print(current_position_aircraft)
+            
             print(array_position_airplane)
             print("position airplane = ",position_target_airplane)
             vis.setVehicleStates(array_position_airplane, group_colors)
             time.sleep(self.dt)
-
 
 
 simulator = Simulator()
@@ -441,16 +346,4 @@ rcv_thread = threading.Thread(target=simulator.start,
 rcv_thread.start()
 
 vis.startVisualization()
-
-
-
-# show(0)
-
-# plt.plot(position_airplane[0], position_airplane[1], 'o')
-
-
-# plt.plot(array_position_airplane[0], array_position_airplane[1])
-# for i in range(0, len(array_position_target)):
-# plt.plot(array_position_target, 'b')
-# plt.show()
 
