@@ -60,7 +60,13 @@ class Visualizer():
         self.range = scene.visuals.Ellipse(center = [0, 0, 0], color = [0, 1, 1, 0.1], radius = [detection_range, detection_range], border_color = [0, 1, 1, 1])
 
         self.direction = scene.visuals.Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
-                         axis_color='g', tick_color='g', text_color='g',
+                         axis_color=[0.7, 1, 1], tick_color='g', text_color='g',
+                         font_size=16, parent=self.view.scene, domain=(0., 5.))
+        self.left_direction = scene.visuals.Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
+                         axis_color='y', tick_color='g', text_color='g',
+                         font_size=16, parent=self.view.scene, domain=(0., 5.))
+        self.right_direction = scene.visuals.Axis(pos=[[0, 0], [0, 5]], tick_direction=(-1, 0),
+                         axis_color='y', tick_color='g', text_color='g',
                          font_size=16, parent=self.view.scene, domain=(0., 5.))
 
         self.view.add(self.range)
@@ -74,7 +80,6 @@ class Visualizer():
 #                                     depth=self.bodyBoxDepth,
 #                                     color=(0, 0, 1, 1),
 #                                     edge_color='green')
-
         self.group_colors = np.ones((1, 4), dtype=np.float32)
         self.group_poses = np.zeros((1, 3), dtype=np.float32)
         self.update_data = False
@@ -119,17 +124,33 @@ class Visualizer():
 
 
             tr_direction = MatrixTransform()
-            # tr_direction.rotate(math.degrees(self.orientation[0]), (1, 0, 0))
-            # tr_direction.rotate(math.degrees(self.orientation[1]), (0, 1, 0))
+            tr_left_direction = MatrixTransform()
+            tr_right_direction = MatrixTransform()
+
             tr_direction.rotate(math.degrees(self.orientation), (0, 0, 1))
+            tr_left_direction.rotate(math.degrees(self.orientation + total_lead_angle), (0, 0, 1))
+            tr_right_direction.rotate(math.degrees(self.orientation - total_lead_angle), (0, 0, 1))
 
             tr_direction.translate((self.group_poses[0][0],
-                                self.group_poses[0][1],
-                                self.group_poses[0][2]))
+                                    self.group_poses[0][1],
+                                    self.group_poses[0][2]))
+
+            tr_left_direction.translate((self.group_poses[0][0],
+                                         self.group_poses[0][1],
+                                         self.group_poses[0][2]))
+
+            tr_right_direction.translate((self.group_poses[0][0],
+                                          self.group_poses[0][1],
+                                          self.group_poses[0][2]))
 
 
 
             self.direction.transform = tr_direction
+
+            self.left_direction.transform = tr_left_direction
+            self.right_direction.transform = tr_right_direction
+            # tr_direction.rotate(math.degrees(self.orientation) - 11, (0, 0, 1))
+            # self.right_direction.transform = tr_direction
 
             # tr.rotate(radToDeg * (bodyOrientation[0]), (1, 0, 0))
             # tr.rotate(radToDeg * (bodyOrientation[1]), (0, 1, 0))
@@ -169,6 +190,22 @@ class Math:
         v1_u = self.unit_vector(v1)
         v2_u = self.unit_vector(v2)
         return np.arccos(np.clip(np.dot(v1_u, v2_u), -1.0, 1.0))
+    
+    def get_angle(self, center, point):
+        x = point[0] - center[0]
+        y = point[1] - center[1]
+
+        if (x == 0):
+            if (y > 0):
+                return(math.radians(180))
+            else:
+                return (0)
+        a = math.atan(y / x)
+        if (x > 0):
+            return (a + math.pi / 2)
+        else:
+            return (a + math.radians(270))
+
 
 
 class Math_model_aircraft:
@@ -225,16 +262,10 @@ class Math_model_aircraft:
         
 
 
-
-
-
 class Simulator:
     def __init__(self):
 
         self.mathem = Math()
-
-        
-
 
 
         # params aircraft
@@ -321,14 +352,19 @@ class Simulator:
             #     break
 
             
-            phi = self.mathem.calculate_angle(position_target_airplane[0], position_target_airplane[1])
-            
+            # phi = self.mathem.calculate_angle(position_target_airplane[0], position_target_airplane[1])
 
-            if (phi >= math.radians(270) and phi <= math.radians(360)):
-                phi -= math.radians(270)
-            elif (phi >= math.radians(0) and phi <= math.radians(90)):
-                phi += math.radians(90)
+            phi = self.mathem.get_angle(center = np.array([0, 0]), point = position_target_airplane)
+            phi += math.pi
+
+            # if (phi >= math.radians(270) and phi <= math.radians(360)):
+            #     phi -= math.radians(270)
+            # elif (phi >= math.radians(0) and phi <= math.radians(90)):
+            #     phi += math.radians(90)
+            # elif (phi >= math.radians(180) and phi <= math.radians(270)):
+            #     phi -= math.radians(180)
             print("phi = ", math.degrees(phi))
+            
 
             vis.get_orientation(phi)
             
@@ -340,7 +376,9 @@ class Simulator:
 
             # self.aircraft.calculate_position(300 * scale_factor, phi, i)
             self.aircraft.calculate_position(0 * scale_factor, phi, i)
-            self.aircraft_target.calculate_position(-300 * scale_factor, self.aircraft_target.get_phi(), i)
+            # self.aircraft_target.calculate_position(-300 * scale_factor, self.aircraft_target.get_phi(), i)
+            # self.aircraft_target.calculate_position(-300 * scale_factor, math.radians(175), i)
+            self.aircraft_target.calculate_position(-300 * scale_factor, math.radians(90), i)
 
             current_position_aircraft = self.aircraft.get_position()
             current_position_aircraft_target = self.aircraft_target.get_position()
