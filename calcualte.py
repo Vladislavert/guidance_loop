@@ -18,8 +18,9 @@ import math
 scale_factor = 0.0001
 # params radar
 detection_range = 80000.0 * scale_factor
-total_lead_angle = math.radians(11)
-opening_angle = math.radians(15)
+total_lead_angle = math.radians(20)
+# opening_angle = math.radians(15)
+opening_angle = math.radians(10)
 speed_aircraft = 300 * scale_factor
 speed_aircraft_target = -300 * scale_factor
 
@@ -129,10 +130,10 @@ class Visualizer():
             tr_left_direction = MatrixTransform()
             tr_right_direction = MatrixTransform()
 
-            tr_opening.rotate(math.degrees(self.orientation + opening_angle), (0, 0, 1))
+            tr_opening.rotate(math.degrees(self.orientation + total_lead_angle), (0, 0, 1))
             tr_direction.rotate(math.degrees(self.orientation), (0, 0, 1))
             tr_left_direction.rotate(math.degrees(self.orientation + total_lead_angle + opening_angle), (0, 0, 1))
-            tr_right_direction.rotate(math.degrees(self.orientation - total_lead_angle + opening_angle), (0, 0, 1))
+            tr_right_direction.rotate(math.degrees(self.orientation + total_lead_angle - opening_angle), (0, 0, 1))
 
             tr_opening.translate((self.group_poses[0][0],
                                   self.group_poses[0][1],
@@ -248,7 +249,6 @@ class Math_model_aircraft:
             self.phi = 0
         elif (self.phi < 0):
             self.phi = 360
-        
 
 
 class Simulator:
@@ -269,6 +269,7 @@ class Simulator:
         self.dt = 0.1
         self.aircraft = Math_model_aircraft(self.velocity_airplane, self.position_airplane, self.phi)
         self.aircraft_target = Math_model_aircraft(self.velocity_target, self.position_target, math.radians(90))
+        
 
     def dotproduct(self, v1, v2):
         return sum((a*b) for a, b in zip(v1, v2))
@@ -286,19 +287,30 @@ class Simulator:
         
         return array_matrix_2d
 
+
     def is_detection(self, position_aircraft_target, position_aircraft, phi):
         distance = np.linalg.norm(np.array([0.0, detection_range]))
         between_distance = np.linalg.norm(position_aircraft - position_aircraft_target)
 
+        vec = self.aircraft.get_velocity() * 1000
+
+        right_line = self.rotate_matrix(opening_angle) @ vec
+        left_line = self.rotate_matrix(-opening_angle) @ vec
+
+        distance_point_right = np.cross(position_aircraft_target - position_aircraft, position_aircraft - right_line)[2]
+        distance_point_left = np.cross(position_aircraft_target - position_aircraft, position_aircraft - left_line)[2]
+
         if (between_distance <= distance):
-            # Добавить векторное произведение, для проверки попадания в диапазон
-            return True
+            if (distance_point_right <= 0 and distance_point_left >= 0):
+                return True
         else:
             return False 
 
     def start(self):
 
         group_colors = np.ones((2, 4), dtype=np.float32)
+        group_colors[0] = [1, 0, 0, 1]
+        group_colors[1] = [0, 0, 1, 1]
         array_position_airplane = np.ones((2, 3), dtype=np.float32)
 
         array_position_airplane[0] = self.aircraft.get_position()
@@ -318,7 +330,7 @@ class Simulator:
             phi = self.mathem.get_angle(center = np.array([0, 0]), point =  current_position_aircraft_target - current_position_aircraft)
             phi += math.pi
 
-            if (self.is_detection(current_position_aircraft_target, current_position_aircraft, phi)):
+            if (self.is_detection(current_position_aircraft_target, current_position_aircraft, phi + total_lead_angle)):
                 print("time =" , i)
                 break
 
@@ -326,7 +338,7 @@ class Simulator:
             
             vis.get_orientation(phi)
             
-            self.aircraft.calculate_position(speed_aircraft, phi + math.radians(90) + opening_angle, i)
+            self.aircraft.calculate_position(speed_aircraft, phi + math.radians(90) + total_lead_angle, i)
             self.aircraft_target.calculate_position(speed_aircraft_target, math.radians(90), i)
 
             position_target_airplane = current_position_aircraft + (self.rotate_matrix(self.aircraft.get_phi()) @ current_position_aircraft_target)
