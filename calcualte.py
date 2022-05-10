@@ -1,3 +1,5 @@
+
+# Расчет вероятности успешного наведения
 from multiprocessing import parent_process
 from sqlite3 import connect
 from turtle import position
@@ -11,18 +13,74 @@ import numpy as np
 import matplotlib.pyplot as plt 
 from numpy import linalg as LA
 import math
+import random
+
+
+# учитывая ограничения ЗВНУ ДН
+
+
+# никак не учитывается, мы на плоскости
+y_min = 0
+y_max = 10 
+
+
+
+# Хлам не нужный, у нас нет пилота
+# T_l = 
+# tau_l = 
 
 
 
 # params
 scale_factor = 0.0001
 # params radar
-detection_range = 80000.0 * scale_factor
-total_lead_angle = math.radians(20)
+detection_range = 80000.0 * scale_factor # дальность обнаружения
+total_lead_angle = math.radians(11) 
 # opening_angle = math.radians(15)
-opening_angle = math.radians(10)
+opening_angle = math.radians(45) # полураствор сектора обнаружения цели
 speed_aircraft = 300 * scale_factor
 speed_aircraft_target = -300 * scale_factor
+
+
+delta_D = random.uniform(0, 100) * scale_factor
+delta_epsilon = random.uniform(0, math.radians(1))
+delta_q = random.uniform(0, math.radians(1))
+delta_V = random.uniform(0, 10) * scale_factor
+delta_V_target = random.uniform(0, 10) * scale_factor
+delta_pilot = random.uniform(0,  math.radians(1)) # дискретный случайный процесс с периодом T_об появления
+                                                  # новых случайных значений ошибок штурмана наведения 
+
+# errors(взяты по приколу)
+def update_errors():
+    global delta_D
+    global delta_epsilon
+    global delta_q
+    global delta_V
+    global delta_V_target
+    global delta_pilot
+    
+    delta_D = random.uniform(0, 100) * scale_factor
+    delta_epsilon = random.uniform(0, math.radians(1))
+    delta_q = random.uniform(0, math.radians(1))
+    delta_V = random.uniform(0, 10) * scale_factor
+    delta_V_target = random.uniform(0, 10) * scale_factor
+    delta_pilot = random.uniform(0, 20) #
+
+def reset_errors():
+    global delta_D
+    global delta_epsilon
+    global delta_q
+    global delta_V
+    global delta_V_target
+    global delta_pilot
+    
+    delta_D = 0
+    delta_epsilon = 0
+    delta_q = 0
+    delta_V = 0
+    delta_V_target = 0
+    delta_pilot = 0
+
 
 
 # -------------------Graphics----------------------
@@ -189,13 +247,15 @@ class Math:
     def get_angle(self, center, point):
         x = point[0] - center[0]
         y = point[1] - center[1]
+        global delta_pilot
+        delta_pilot = random.uniform(0,  math.radians(1))
 
         if (x == 0):
             if (y > 0):
                 return(math.radians(180))
             else:
                 return (0)
-        a = math.atan(y / x)
+        a = math.atan(y / x) + delta_pilot
         if (x > 0):
             return (a + math.pi / 2)
         else:
@@ -249,7 +309,9 @@ class Math_model_aircraft:
             self.phi = 0
         elif (self.phi < 0):
             self.phi = 360
-
+    
+    def update_errors():
+        a = 2
 
 class Simulator:
     def __init__(self):
@@ -262,7 +324,10 @@ class Simulator:
         self.phi = 0
 
         # params aircraft target
-        self.position_target = np.array([-75000.0, 250000.0, 0]) * scale_factor
+        # я взял диапазон генерации чисел случайный, в лабе ни слова про радиус действия РЛС
+        x_target_init = random.uniform(-75000.0, 75000)
+        y_target_init = random.uniform(-250000.0, 250000.0)
+        self.position_target = np.array([x_target_init, y_target_init, 0]) * scale_factor
         self.velocity_target = np.array([0.0, 0.0, 0]) * scale_factor
 
         # params simulator
@@ -270,6 +335,24 @@ class Simulator:
         self.aircraft = Math_model_aircraft(self.velocity_airplane, self.position_airplane, self.phi)
         self.aircraft_target = Math_model_aircraft(self.velocity_target, self.position_target, math.radians(90))
         
+    def update_init_param(self):
+        # params aircraft
+        self.velocity_airplane = np.array([0, 0, 0]) * scale_factor
+        self.position_airplane = np.array([0.0, 0.0, 0]) * scale_factor
+        self.phi = 0
+
+        # params aircraft target
+        # я взял диапазон генерации чисел случайный, в лабе ни слова про радиус действия РЛС
+        x_target_init = random.uniform(-75000.0, 75000)
+        y_target_init = random.uniform(-250000.0, 250000.0)
+        self.position_target = np.array([x_target_init, y_target_init, 0]) * scale_factor
+        self.velocity_target = np.array([0.0, 0.0, 0]) * scale_factor
+
+        # params simulator
+        self.dt = 0.1
+        self.aircraft = Math_model_aircraft(self.velocity_airplane, self.position_airplane, self.phi)
+        self.aircraft_target = Math_model_aircraft(self.velocity_target, self.position_target, math.radians(90))
+
 
     def dotproduct(self, v1, v2):
         return sum((a*b) for a, b in zip(v1, v2))
@@ -290,9 +373,9 @@ class Simulator:
 
     def is_detection(self, position_aircraft_target, position_aircraft, phi):
         distance = np.linalg.norm(np.array([0.0, detection_range]))
-        between_distance = np.linalg.norm(position_aircraft - position_aircraft_target)
+        between_distance = np.linalg.norm(position_aircraft - position_aircraft_target) + delta_D
 
-        vec = self.aircraft.get_velocity() * 1000
+        vec = self.aircraft.get_velocity() * 1000 + delta_V
 
         right_line = self.rotate_matrix(opening_angle) @ vec
         left_line = self.rotate_matrix(-opening_angle) @ vec
@@ -304,7 +387,14 @@ class Simulator:
             if (distance_point_right <= 0 and distance_point_left >= 0):
                 return True
         else:
-            return False 
+            return False
+
+    def is_continue(self, t, phi):
+        T_d = 100 # время полёта истребителя на полный радиус действия(каво?)
+        if (t > T_d or phi > math.pi / 2):
+            return True
+        else: 
+            return False
 
     def start(self):
 
@@ -312,10 +402,13 @@ class Simulator:
         group_colors[0] = [1, 0, 0, 1]
         group_colors[1] = [0, 0, 1, 1]
         array_position_airplane = np.ones((2, 3), dtype=np.float32)
+        N_success = 0
+        N_k = 10 # кол-во итераций
 
+        # for N in range(0, N_k):
+        self.update_init_param()
         array_position_airplane[0] = self.aircraft.get_position()
         array_position_airplane[1] = self.aircraft_target.get_position()
-
 
         position_target_airplane = self.aircraft.get_position() + (self.rotate_matrix(self.aircraft.get_phi()) @ self.aircraft_target.get_position()) # координаты связанные с самолётом
 
@@ -323,16 +416,29 @@ class Simulator:
         print(array_position_airplane)
 
         time.sleep(1)
+        time_scan = 0
+        phi = 0
         for i in np.arange(0, 100, self.dt):
-            
+            time_scan += self.dt
             current_position_aircraft = self.aircraft.get_position()
             current_position_aircraft_target = self.aircraft_target.get_position()
-            phi = self.mathem.get_angle(center = np.array([0, 0]), point =  current_position_aircraft_target - current_position_aircraft)
-            phi += math.pi
+            # не на кажлом шаге
+            # если входи взону без оьшибок, то вероятность поражения  = 1
+            # с ошибками. ОШИБКА ПО КУРСУ сигма - 3 процента 6 процентов 9 процентов
+            if (time_scan % 10 <= 0.1 or time_scan == self.dt):
+                phi = self.mathem.get_angle(center = np.array([0, 0]), point =  current_position_aircraft_target - current_position_aircraft)
+                phi += math.pi
+                update_errors()
+            else:
+                reset_errors()
 
             if (self.is_detection(current_position_aircraft_target, current_position_aircraft, phi + total_lead_angle)):
                 print("time =" , i)
+                N_success += 1
                 break
+            else:
+                if (self.is_continue(time_scan, phi)):
+                    break
 
             print("phi = ", math.degrees(phi))
             
@@ -348,13 +454,17 @@ class Simulator:
             print(array_position_airplane)
             print("position airplane = ",position_target_airplane)
             vis.setVehicleStates(array_position_airplane, group_colors)
-            time.sleep(self.dt)
+            # time.sleep(self.dt)
+
+        print("W_дн = ", N_success / N_k)
+
 
 
 simulator = Simulator()
 
 rcv_thread = threading.Thread(target=simulator.start,
                                       name="rcv_thread")
+
 rcv_thread.start()
 
 vis.startVisualization()
