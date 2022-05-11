@@ -286,9 +286,16 @@ class Math_model_aircraft:
         self.past_velocity = self.velocity
 
     def calculate_velocity(self, abs_velocity, phi):
-        self.velocity[0] = abs_velocity * np.cos(phi)
-        self.velocity[1] = abs_velocity * np.sin(phi)
+        self.velocity[0] = abs_velocity * np.cos(self.pid(phi))
+        self.velocity[1] = abs_velocity * np.sin(self.pid(phi))
         self.velocity[2] = 0
+
+    def pid(self, desired_angle):
+        # error_angle = desired_angle - self.phi
+        # k_p = 1
+        # cmd = k_p * error_angle
+
+        return(desired_angle)
 
     def get_velocity(self):
         return self.velocity
@@ -390,8 +397,16 @@ class Simulator:
             return False
 
     def is_continue(self, t, phi):
-        T_d = 100 # время полёта истребителя на полный радиус действия(каво?)
-        if (t > T_d or phi > math.pi / 2):
+        T_d = 30 # время полёта истребителя на полный радиус действия(каво?)
+        position = self.aircraft.get_position()
+        position_target = self.aircraft_target.get_position()
+        velocity = self.aircraft.get_velocity() * 100
+        vect = -np.array([position_target[0] - position[0],
+                          position_target[1] - position[1],
+                          position_target[2] - position[2]])
+        phi_1 = self.mathem.angle_between(velocity, vect)
+        phi_1 -= total_lead_angle
+        if (t > T_d or (phi_1 > math.radians(270) or phi_1 > math.radians(180))):
             return True
         else: 
             return False
@@ -405,65 +420,79 @@ class Simulator:
         N_success = 0
         N_k = 10 # кол-во итераций
 
-        # for N in range(0, N_k):
-        self.update_init_param()
-        array_position_airplane[0] = self.aircraft.get_position()
-        array_position_airplane[1] = self.aircraft_target.get_position()
+        for N in range(0, N_k):
+            self.update_init_param()
+            array_position_airplane[0] = self.aircraft.get_position()
+            array_position_airplane[1] = self.aircraft_target.get_position()
 
-        position_target_airplane = self.aircraft.get_position() + (self.rotate_matrix(self.aircraft.get_phi()) @ self.aircraft_target.get_position()) # координаты связанные с самолётом
+            position_target_airplane = self.aircraft.get_position() + (self.rotate_matrix(self.aircraft.get_phi()) @ self.aircraft_target.get_position()) # координаты связанные с самолётом
 
-        print(self.aircraft_target.get_position())
-        print(array_position_airplane)
-
-        time.sleep(1)
-        time_scan = 0
-        phi = 0
-        for i in np.arange(0, 100, self.dt):
-            time_scan += self.dt
-            current_position_aircraft = self.aircraft.get_position()
-            current_position_aircraft_target = self.aircraft_target.get_position()
-            # не на кажлом шаге
-            # если входи взону без оьшибок, то вероятность поражения  = 1
-            # с ошибками. ОШИБКА ПО КУРСУ сигма - 3 процента 6 процентов 9 процентов
-            if (time_scan % 10 <= 0.1 or time_scan == self.dt):
-                phi = self.mathem.get_angle(center = np.array([0, 0]), point =  current_position_aircraft_target - current_position_aircraft)
-                phi += math.pi
-                update_errors()
-            else:
-                reset_errors()
-
-            if (self.is_detection(current_position_aircraft_target, current_position_aircraft, phi + total_lead_angle)):
-                print("time =" , i)
-                N_success += 1
-                break
-            else:
-                if (self.is_continue(time_scan, phi)):
-                    break
-
-            print("phi = ", math.degrees(phi))
-            
-            vis.get_orientation(phi)
-            
-            self.aircraft.calculate_position(speed_aircraft, phi + math.radians(90) + total_lead_angle, i)
-            self.aircraft_target.calculate_position(speed_aircraft_target, math.radians(90), i)
-
-            position_target_airplane = current_position_aircraft + (self.rotate_matrix(self.aircraft.get_phi()) @ current_position_aircraft_target)
-            array_position_airplane[0] = current_position_aircraft
-            array_position_airplane[1] = current_position_aircraft_target
-            
+            print(self.aircraft_target.get_position())
             print(array_position_airplane)
-            print("position airplane = ",position_target_airplane)
-            vis.setVehicleStates(array_position_airplane, group_colors)
-            # time.sleep(self.dt)
+
+            time.sleep(1)
+            time_scan = 0
+            phi = 0
+            for i in np.arange(0, 100, self.dt):
+                time_scan += self.dt
+                current_position_aircraft = self.aircraft.get_position()
+                current_position_aircraft_target = self.aircraft_target.get_position()
+                # не на кажлом шаге
+                # если входи взону без оьшибок, то вероятность поражения  = 1
+                # с ошибками. ОШИБКА ПО КУРСУ сигма - 3 процента 6 процентов 9 процентов
+                if (time_scan % 10 <= 0.1 or time_scan == self.dt):
+                    phi = self.mathem.get_angle(center = np.array([0, 0]), point =  current_position_aircraft_target - current_position_aircraft)
+                    phi += math.pi
+                    update_errors()
+                else:
+                    reset_errors()
+
+                # print("phi = ", math.degrees(phi))
+                
+                vis.get_orientation(phi)
+                
+                self.aircraft.calculate_position(speed_aircraft, phi + math.radians(90) + total_lead_angle, i)
+                self.aircraft_target.calculate_position(speed_aircraft_target, math.radians(90), i)
+
+                position_target_airplane = current_position_aircraft + (self.rotate_matrix(self.aircraft.get_phi()) @ current_position_aircraft_target)
+                array_position_airplane[0] = current_position_aircraft
+                array_position_airplane[1] = current_position_aircraft_target
+                
+                # print(array_position_airplane)
+                # print("position airplane = ",position_target_airplane)
+                vis.setVehicleStates(array_position_airplane, group_colors)
+
+                if (self.is_detection(current_position_aircraft_target, current_position_aircraft, phi + total_lead_angle)):
+                    print("time =" , i)
+                    N_success += 1
+                    break
+                else:
+                    if (self.is_continue(time_scan, phi)):
+                        break
+
+                print("time = ", time_scan)
+
+                # time.sleep(self.dt)
+
+                
 
         print("W_дн = ", N_success / N_k)
 
 
+# v1 = np.array([1, 0, 0])
+# v2 = np.array([1.1, -0.5, 0])
+
+
+# mathem = Math()
+
+# print(mathem.angle_between(v1, v2))
+
+# for i in range(0, 10):
 
 simulator = Simulator()
 
 rcv_thread = threading.Thread(target=simulator.start,
-                                      name="rcv_thread")
+                                    name="rcv_thread")
 
 rcv_thread.start()
 
